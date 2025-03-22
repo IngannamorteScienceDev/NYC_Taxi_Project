@@ -1,9 +1,40 @@
 """
 Модуль для предобработки данных: заполнение пропусков и корректировка выбросов.
+Теперь он объединяет данные из всех файлов за 2024 год и файл за январь 2025.
 """
 
 import pandas as pd
 import numpy as np
+import glob
+import os
+
+
+def load_all_data(data_dir: str) -> pd.DataFrame:
+    """
+    Считывает все Parquet-файлы за 2024 год и файл за январь 2025,
+    объединяет их в один DataFrame.
+
+    :param data_dir: Путь к директории, где лежат файлы Parquet.
+    :return: Объединённый DataFrame со всеми данными.
+    """
+    # Получаем список файлов за 2024 год
+    files_2024 = sorted(glob.glob(os.path.join(data_dir, "yellow_tripdata_2024-*.parquet")))
+    # Файл за январь 2025
+    file_jan_2025 = os.path.join(data_dir, "yellow_tripdata_2025-01.parquet")
+
+    df_list = []
+    for file_path in files_2024:
+        df_temp = pd.read_parquet(file_path)
+        df_list.append(df_temp)
+
+    # Читаем данные за январь 2025
+    df_jan_2025 = pd.read_parquet(file_jan_2025)
+    df_list.append(df_jan_2025)
+
+    # Объединяем все DataFrame
+    df_all = pd.concat(df_list, ignore_index=True)
+    return df_all
+
 
 def fill_missing_numeric(df: pd.DataFrame, numeric_cols: list[str]) -> pd.DataFrame:
     """
@@ -18,6 +49,7 @@ def fill_missing_numeric(df: pd.DataFrame, numeric_cols: list[str]) -> pd.DataFr
         df[col] = df[col].fillna(median_val)
     return df
 
+
 def fill_missing_categorical(df: pd.DataFrame, categorical_cols: list[str]) -> pd.DataFrame:
     """
     Заполняет пропуски в категориальных столбцах наиболее часто встречающимся значением (модой).
@@ -31,7 +63,9 @@ def fill_missing_categorical(df: pd.DataFrame, categorical_cols: list[str]) -> p
         df[col] = df[col].fillna(mode_val)
     return df
 
-def cap_outliers(df: pd.DataFrame, col: str, lower_percentile: float = 0.01, upper_percentile: float = 0.99) -> pd.DataFrame:
+
+def cap_outliers(df: pd.DataFrame, col: str, lower_percentile: float = 0.01,
+                 upper_percentile: float = 0.99) -> pd.DataFrame:
     """
     Корректирует выбросы в числовом столбце, обрезая значения до заданных процентилей.
 
@@ -46,6 +80,7 @@ def cap_outliers(df: pd.DataFrame, col: str, lower_percentile: float = 0.01, upp
     df[col] = df[col].clip(lower=lower_val, upper=upper_val)
     return df
 
+
 def remove_negative_values(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     """
     Для столбцов, где не должно быть отрицательных значений (например, дистанция или суммы),
@@ -59,18 +94,19 @@ def remove_negative_values(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
         df.loc[df[col] < 0, col] = np.nan
     return df
 
+
 def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Выполняет комплексную предобработку данных:
-    1. Заменяет отрицательные значения в определённых столбцах (например, дистанция и суммы) на NaN.
-    2. Заполняет пропуски в числовых столбцах медианными значениями.
-    3. Заполняет пропуски в категориальных столбцах модой.
-    4. Корректирует выбросы для выбранных столбцов.
+      1. Заменяет отрицательные значения в определённых столбцах (например, дистанция и суммы) на NaN.
+      2. Заполняет пропуски в числовых столбцах медианными значениями.
+      3. Заполняет пропуски в категориальных столбцах модой.
+      4. Корректирует выбросы для выбранных столбцов.
 
     :param df: Исходный DataFrame.
     :return: Предобработанный DataFrame.
     """
-    # 1. Заменяем отрицательные значения в столбцах, где их быть не должно
+    # 1. Заменяем отрицательные значения
     df = remove_negative_values(df, cols=['trip_distance', 'fare_amount', 'total_amount'])
 
     # 2. Заполнение пропусков в числовых столбцах
@@ -94,11 +130,11 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+
 if __name__ == "__main__":
-    # Пример использования: загрузка данных и их предобработка.
-    # Убедитесь, что путь к файлу корректный.
-    data_path = "../data/yellow_tripdata_2025-01.parquet"
-    df = pd.read_parquet(data_path)
+    # Загрузка данных: объединяем все файлы за 2024 год и январь 2025
+    data_dir = "../data"
+    df = load_all_data(data_dir)
 
     print("До предобработки:")
     print(df.isna().sum())

@@ -13,7 +13,7 @@
 import pandas as pd
 
 # Импортируем функции из модулей в папке src
-from src.eda import run_eda, load_data
+from src.eda import run_eda, load_all_data  # load_all_data объединяет файлы за 2024 и январь 2025
 from src.preprocessing import preprocess_data
 from src.aggregation import aggregate_daily
 from src.modeling import (
@@ -30,10 +30,15 @@ from src.evaluation import (
 
 
 def main():
-    # 1. Загрузка данных
-    data_path = "data/yellow_tripdata_2025-01.parquet"
-    df_raw = load_data(data_path)
-    print("Исходные данные загружены.")
+    # 1. Загрузка данных: объединяем все файлы за 2024 год и файл за январь 2025
+    data_dir = "data"
+    df_raw = load_all_data(data_dir)
+    print("Исходные данные загружены. Всего строк:", len(df_raw))
+
+    # Применяем дополнительную фильтрацию, чтобы оставить только данные от 2024-01-01 до 2025-02-01
+    df_raw = df_raw[(df_raw['tpep_pickup_datetime'] >= pd.Timestamp('2024-01-01')) &
+                    (df_raw['tpep_pickup_datetime'] < pd.Timestamp('2025-02-01'))]
+    print("После фильтрации по дате, строк:", len(df_raw))
 
     # 2. Выполнение EDA (опционально, графики будут отображены)
     print("Выполняется первичный анализ (EDA)...")
@@ -46,10 +51,10 @@ def main():
     # 4. Агрегация данных по дням
     print("Агрегация данных по дням...")
     df_daily = aggregate_daily(df_clean)
-    print("Агрегированные данные (первые 5 строк):")
+    print("Агрегация по дням (первые 5 строк):")
     print(df_daily.head())
 
-    # Приводим столбец ds к типу datetime для агрегированных данных (фактические данные)
+    # Приводим столбец ds к типу datetime для агрегированных данных
     df_daily['ds'] = pd.to_datetime(df_daily['ds'], errors='coerce')
 
     # 5. Разделение данных на тренировочную и тестовую выборки (например, последние 30 дней для теста)
@@ -63,10 +68,9 @@ def main():
 
     # 7. Прогноз на период тестовой выборки (30 дней)
     forecast_test = make_forecast(model, periods=test_size)
-    # Делаем копию, чтобы избежать SettingWithCopyWarning при изменении столбцов
-    forecast_for_test = forecast_test.tail(test_size).copy()
+    forecast_for_test = forecast_test.tail(test_size).copy()  # делаем копию, чтобы избежать предупреждений
 
-    # Приводим столбец ds к типу datetime
+    # Приводим столбец ds к типу datetime для прогнозных данных и тестового DataFrame
     forecast_for_test['ds'] = pd.to_datetime(forecast_for_test['ds'], errors='coerce')
     test_df['ds'] = pd.to_datetime(test_df['ds'], errors='coerce')
 

@@ -4,6 +4,41 @@
 """
 
 import pandas as pd
+import glob
+import os
+
+
+def load_all_data(data_dir: str) -> pd.DataFrame:
+    """
+    Считывает все Parquet-файлы за 2024 год и файл за январь 2025,
+    объединяет их в один DataFrame и оставляет только записи с датами от 2024-01-01 до 2025-02-01.
+
+    :param data_dir: Путь к директории, где лежат файлы Parquet.
+    :return: Объединённый DataFrame со всеми данными в нужном диапазоне.
+    """
+    # Получаем файлы за 2024 год
+    files_2024 = sorted(glob.glob(os.path.join(data_dir, "yellow_tripdata_2024-*.parquet")))
+    # Файл за январь 2025
+    file_jan_2025 = os.path.join(data_dir, "yellow_tripdata_2025-01.parquet")
+
+    df_list = []
+    for file in files_2024:
+        df_temp = pd.read_parquet(file)
+        df_list.append(df_temp)
+
+    df_list.append(pd.read_parquet(file_jan_2025))
+    df_all = pd.concat(df_list, ignore_index=True)
+
+    # Приводим столбец к datetime, если это необходимо
+    if not pd.api.types.is_datetime64_any_dtype(df_all['tpep_pickup_datetime']):
+        df_all['tpep_pickup_datetime'] = pd.to_datetime(df_all['tpep_pickup_datetime'], errors='coerce')
+
+    # Фильтруем записи: оставляем даты от 2024-01-01 до 2025-02-01 (включительно начало и исключая конец)
+    df_all = df_all[(df_all['tpep_pickup_datetime'] >= '2024-01-01') &
+                    (df_all['tpep_pickup_datetime'] < '2025-02-01')]
+
+    return df_all
+
 
 def aggregate_daily(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -15,26 +50,15 @@ def aggregate_daily(df: pd.DataFrame) -> pd.DataFrame:
              - ds: дата (без времени)
              - y: количество поездок в этот день
     """
-    # Создаем копию DataFrame, чтобы не изменять оригинал
     df = df.copy()
-
-    # Проверяем, что столбец 'tpep_pickup_datetime' имеет тип datetime, иначе приводим его
     if not pd.api.types.is_datetime64_any_dtype(df['tpep_pickup_datetime']):
         df['tpep_pickup_datetime'] = pd.to_datetime(df['tpep_pickup_datetime'], errors='coerce')
-
-    # Создаем новый столбец с датой (без времени)
     df['pickup_date'] = df['tpep_pickup_datetime'].dt.date
-
-    # Группируем по дате и считаем количество записей (поездок)
     df_daily = df.groupby('pickup_date').size().reset_index(name='trip_count')
-
-    # Переименовываем столбцы для совместимости с Prophet (ds и y)
     df_daily.rename(columns={'pickup_date': 'ds', 'trip_count': 'y'}, inplace=True)
-
-    # Сортируем по дате
     df_daily = df_daily.sort_values(by='ds').reset_index(drop=True)
-
     return df_daily
+
 
 def aggregate_hourly(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -46,38 +70,25 @@ def aggregate_hourly(df: pd.DataFrame) -> pd.DataFrame:
              - ds: дата и время, округленные до часа
              - y: количество поездок в этот час
     """
-    # Создаем копию DataFrame
     df = df.copy()
-
-    # Проверяем, что 'tpep_pickup_datetime' имеет тип datetime, иначе приводим его
     if not pd.api.types.is_datetime64_any_dtype(df['tpep_pickup_datetime']):
         df['tpep_pickup_datetime'] = pd.to_datetime(df['tpep_pickup_datetime'], errors='coerce')
-
-    # Округляем время до ближайшего часа (используем 'h' вместо 'H' согласно новому стандарту)
     df['pickup_hour'] = df['tpep_pickup_datetime'].dt.floor('h')
-
-    # Группируем по округленному часу и считаем количество поездок
     df_hourly = df.groupby('pickup_hour').size().reset_index(name='trip_count')
-
-    # Переименовываем столбцы для совместимости с Prophet
     df_hourly.rename(columns={'pickup_hour': 'ds', 'trip_count': 'y'}, inplace=True)
-
-    # Сортируем по времени
     df_hourly = df_hourly.sort_values(by='ds').reset_index(drop=True)
-
     return df_hourly
 
-if __name__ == "__main__":
-    # Пример использования функций агрегации
-    data_path = "../data/yellow_tripdata_2025-01.parquet"
-    df = pd.read_parquet(data_path)
 
-    # Агрегация по дням
+if __name__ == "__main__":
+    data_dir = "../data"
+    df = load_all_data(data_dir)
+    print(f"Считано {len(df)} строк из всех файлов после фильтрации.")
+
     df_daily = aggregate_daily(df)
     print("Агрегация по дням:")
     print(df_daily.head())
 
-    # Агрегация по часам
     df_hourly = aggregate_hourly(df)
     print("\nАгрегация по часам:")
     print(df_hourly.head())

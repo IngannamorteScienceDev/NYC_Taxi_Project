@@ -6,17 +6,37 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import glob
+import os
 
 
-def load_data(path: str) -> pd.DataFrame:
+def load_all_data(data_dir: str) -> pd.DataFrame:
     """
-    Загружает данные из Parquet-файла по указанному пути.
+    Считывает все Parquet-файлы за 2024 год + январь 2025,
+    объединяет их в один DataFrame.
 
-    :param path: Путь к Parquet-файлу.
-    :return: DataFrame с загруженными данными.
+    :param data_dir: Путь к директории, где хранятся файлы Parquet.
+    :return: Единый DataFrame со всеми данными.
     """
-    df = pd.read_parquet(path)
-    return df
+    # Собираем все файлы за 2024 год
+    all_files_2024 = sorted(glob.glob(os.path.join(data_dir, "yellow_tripdata_2024-*.parquet")))
+
+    # Файл за январь 2025
+    file_jan_2025 = os.path.join(data_dir, "yellow_tripdata_2025-01.parquet")
+
+    df_list = []
+    # Читаем файлы за 2024 год
+    for file_path in all_files_2024:
+        df_temp = pd.read_parquet(file_path)
+        df_list.append(df_temp)
+
+    # Читаем январь 2025
+    df_jan_2025 = pd.read_parquet(file_jan_2025)
+    df_list.append(df_jan_2025)
+
+    # Объединяем все в один DataFrame
+    df_all = pd.concat(df_list, ignore_index=True)
+    return df_all
 
 
 def run_eda(df: pd.DataFrame) -> None:
@@ -68,13 +88,11 @@ def run_eda(df: pd.DataFrame) -> None:
 
 def main():
     """
-    Точка входа: загружает данные и запускает EDA.
+    Точка входа: загружает данные за 2024 год + январь 2025 и запускает EDA.
     """
-    # Укажите путь к вашему файлу Parquet
-    # Если eda.py лежит в папке src, а данные в папке data, используйте "../data/..."
-    data_path = "../data/yellow_tripdata_2025-01.parquet"
-
-    df = load_data(data_path)
+    data_dir = "../data"  # Папка, где лежат файлы Parquet
+    df = load_all_data(data_dir)
+    print(f"Считано {len(df)} строк из всех файлов 2024 года и января 2025.")
     run_eda(df)
 
 

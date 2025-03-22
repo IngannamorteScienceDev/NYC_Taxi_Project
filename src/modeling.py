@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from prophet import Prophet
 from prophet.diagnostics import cross_validation, performance_metrics
 
-# Используем абсолютный импорт для доступа к функции агрегации
-from src.aggregation import aggregate_daily
+# Импортируем функции агрегации, включая load_all_data
+from src.aggregation import load_all_data, aggregate_daily
 
 def train_prophet_model(df: pd.DataFrame) -> Prophet:
     """
@@ -84,11 +84,12 @@ def run_cross_validation(model: Prophet, initial: str, period: str, horizon: str
     return df_metrics
 
 if __name__ == "__main__":
-    # Загрузим реальные данные такси из Parquet-файла
-    data_path = "../data/yellow_tripdata_2025-01.parquet"
-    df_raw = pd.read_parquet(data_path)
+    # Загрузим реальные данные такси, объединяя файлы за 2024 год и январь 2025
+    data_dir = "../data"
+    df_raw = load_all_data(data_dir)
+    print("Считано", len(df_raw), "строк из всех файлов.")
 
-    # Агрегируем данные по дням (используя функцию из src/aggregation.py)
+    # Агрегируем данные по дням (с использованием функции aggregate_daily)
     df_daily = aggregate_daily(df_raw)
     print("Агрегация по дням:")
     print(df_daily.head())
